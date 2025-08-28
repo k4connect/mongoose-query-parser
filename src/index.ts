@@ -287,9 +287,15 @@ export class MongooseQueryParser {
           populates.push(pObj);
         }
       } else {
-        if (pObj.populate?.path !== path) {
-          // create deep populate
-          pObj.populate = { path };
+		if (!pObj.populate) {
+			// create deep populate
+			pObj.populate = { path };
+		} else if (pObj.populate.path != path) {
+          // create new deep populate
+		  const clone = JSON.parse(JSON.stringify(pObj));
+		  clone.populate = { path };
+		  populates.push(clone);
+          pObj = clone
         }
         pObj = pObj.populate;
       }
