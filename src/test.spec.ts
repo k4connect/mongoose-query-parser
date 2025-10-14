@@ -115,9 +115,8 @@ class Tester {
     const parser = new MongooseQueryParser();
     const qry = '_id=1&populate=p1,p2:p3.p4,p2:p3:p5,p6:p7,p6:p8';
     const parsed = parser.parse(qry);
-	console.log(JSON.stringify(parsed, null, 4));
     assert.isNotEmpty(parsed.populate);
-    assert.isTrue(parsed.populate.length === 4);
+    assert.isTrue(parsed.populate.length === 3);
     for (const [index, p] of parsed.populate.entries()) {
       if (p.path === 'p2') {
         assert.isTrue(p.populate.path === 'p3');

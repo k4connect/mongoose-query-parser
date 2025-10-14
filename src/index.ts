@@ -274,44 +274,74 @@ export class MongooseQueryParser {
    * [{path: 'createdBy', select: 'name email', populate: {path: 'friends', select: 'name email'}}]
    * @param val
    */
-  private castPopulate(val: string) {
+
+private castPopulate(val: string): any[] {
     const ls = val.split(',').map((s) => s.split(':'));
-    const populates = [];
-    const buildPopulate = (prop: string, pObj) => {
-      const [path, select] = prop.split('.', 2);
-      if (!pObj) {
-        pObj = populates.find(p => p.path == path);
-        if (!pObj) {
-          // create new populate query object
-          pObj = { path };
-          populates.push(pObj);
+    
+    const populateMap = new Map<string, { nestedPaths: string[], fields: Set<string> }>();
+
+    // Group paths by their root
+    ls.forEach(pathArray => {
+        if (pathArray.length === 0) return;
+        
+        // Check if the first element has a dot (field selection at root level)
+        const firstPart = pathArray[0];
+        const dotIndex = firstPart.indexOf('.');
+        
+        if (dotIndex > -1 && pathArray.length === 1) {
+            // Root level field selection like "createdBy.name"
+            const root = firstPart.substring(0, dotIndex);
+            const field = firstPart.substring(dotIndex + 1);
+            
+            if (!populateMap.has(root)) {
+                populateMap.set(root, { nestedPaths: [], fields: new Set() });
+            }
+            populateMap.get(root)!.fields.add(field);
+        } else {
+            // Regular populate path (potentially nested)
+            const root = pathArray[0];
+            
+            if (!populateMap.has(root)) {
+                populateMap.set(root, { nestedPaths: [], fields: new Set() });
+            }
+            
+            if (pathArray.length > 1) {
+                // Has nested path - join the rest with ':'
+                populateMap.get(root)!.nestedPaths.push(pathArray.slice(1).join(':'));
+            }
         }
-      } else {
-		if (!pObj.populate) {
-			// create deep populate
-			pObj.populate = { path };
-		} else if (pObj.populate.path != path) {
-          // create new deep populate
-		  const clone = JSON.parse(JSON.stringify(pObj));
-		  clone.populate = { path };
-		  populates.push(clone);
-          pObj = clone
+    });
+
+    // Build populate objects
+    const result: any[] = [];
+
+    populateMap.forEach((entry, root) => {
+        const populateObj: any = { path: root };
+        
+        // Add field selection if present
+        if (entry.fields.size > 0) {
+            populateObj.select = Array.from(entry.fields).join(' ');
         }
-        pObj = pObj.populate;
-      }
-      if (select) {
-        pObj.select = pObj.select ? (pObj.select + ' ' + select) : select;
-      }
-      return pObj;
-    };
-    for (const s of ls) {
-      let pObj = undefined;
-      for (const prop of s) {
-        pObj = buildPopulate(prop, pObj);
-      }
-    }
-    return populates;
-  }
+        
+        // Add nested populates if present
+        if (entry.nestedPaths.length > 0) {
+            const nestedVal = entry.nestedPaths.join(',');
+            const nestedPopulates = this.castPopulate(nestedVal);
+            
+            // If there's only one nested populate and it has the same structure,
+            // we can flatten it, otherwise use array
+            if (nestedPopulates.length === 1) {
+                populateObj.populate = nestedPopulates[0];
+            } else {
+                populateObj.populate = nestedPopulates;
+            }
+        }
+        
+        result.push(populateObj);
+    });
+
+    return result;
+}
 
   /**
    * cast sort query to object like
