@@ -317,6 +317,8 @@ private castPopulate(val: string): any[] {
 
     populateMap.forEach((entry, root) => {
         const populateObj: any = { path: root };
+
+		populateObj.match = { _deleted: null };
         
         // Add field selection if present
         if (entry.fields.size > 0) {
